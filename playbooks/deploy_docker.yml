@@ -1,5 +1,5 @@
 - name: Deploy Docker Engine and Docker Compose
-  hosts: all
+  hosts: docker_servers
   become: true
   roles:
     - docker
