@@ -41,6 +41,11 @@
     update_cache: true
     state: present
 
+- name: Ensure Docker group exists
+  group:
+    name: docker
+    state: present   
+
 - name: Add user to docker group
   user:
     name: "{{ ansible_user }}"
@@ -48,11 +53,22 @@
     append: yes
   when: ansible_user is defined
 
-- name: Start and enable Docker service
-  service:
+- name: Ensure Docker daemon configuration directory exists
+  file:
+    path: /etc/docker
+    state: directory
+
+- name: Configure Docker daemon
+  template:
+    src: daemon.json.j2
+    dest: /etc/docker/daemon.json
+  notify: Restart Docker    
+
+- name: Ensure Docker service is started and enabled
+  systemd:
     name: docker
     state: started
-    enabled: yes
+    enabled: true
 
 
 
