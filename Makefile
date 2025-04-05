@@ -1,2 +1,2 @@
 all:
-	ansible-playbook playbooks/deploy_docker.yml
+	ansible-playbook playbooks/docker.yml
