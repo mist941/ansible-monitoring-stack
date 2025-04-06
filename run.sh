@@ -31,44 +31,73 @@ check_empty_input() {
 
 show_help() {
     cat <<EOF
-        Usage: $(basename "$0")
+        This script collects the credentials and configuration for deploying 
+        the Grafana, Prometheus, and Loki monitoring stack using Ansible.
+
+        Necesary data:
+            - Username
+            - Password
+            - SSH key path
+            - New user name
+            - New user password
+            - Timezone
 EOF
     exit 0
 }
 
-# read -p "Enter username: " username
+if [ "$#" -gt 0 ]; then
+    case "$1" in
+    -h | --help)
+        show_help
+        ;;
+    esac
+fi
 
-# if [ -z "$username" ]; then
-#     echo "Username cannot be empty"
-#     exit 1
-# fi
+read -p "Enter username: " username
+check_empty_input "Username" "$username"
 
-# read -p "Enter the password: " password
+read -sp "Enter the password: " password
+check_empty_input "Password" "$password"
 
-# if [ -z "$password" ]; then
-#     echo "Password cannot be empty"
-#     exit 1
-# fi
+read -p "Enter ssh key absolute path: " ssh_key_path
+check_empty_input "SSH key path" "$ssh_key_path"
 
-# read -p "Enter ssh key absolute path: " ssh_key_path
+if [ ! -f "$ssh_key_path" ]; then
+    print_error "SSH key path does not exist"
+    exit 1
+fi
 
-# if [ ! -f "$ssh_key_path" ]; then
-#     echo "SSH key path does not exist"
-#     exit 1
-# fi
+print_success "SSH key verified"
 
-# read -p "New user name: " new_user_name
+read -p "New user name: " new_user_name
+check_empty_input "New user name" "$new_user_name"
 
-# if [ -z "$new_user_name" ]; then
-#     echo "New user name cannot be empty"
-#     exit 1
-# fi
+read -sp "New user password: " new_user_password
+check_empty_input "New user password" "$new_user_password"
 
-# read -p "New user password: " new_user_password
+read -p "Enter the timezone: " timezone
 
-# if [ -z "$new_user_password" ]; then
-#     echo "New user password cannot be empty"
-#     exit 1
-# fi
+if [ -z "$timezone" ]; then
+    print_warning "Using default timezone: UTC"
+    timezone="UTC"
+fi
 
-# read -p "Enter the timezone (e.g. Europe/Kyiv): " timezone
+cat <<EOF
+Configuration summary:
+_________________________
+    Username: $username
+    Password: **********
+    SSH key path: $ssh_key_path
+    New user name: $new_user_name
+    New user password: **********
+    Timezone: $timezone
+EOF
+
+read -p "Continue with these settings? (y/n): " confirm
+
+if [ "$confirm" != "y" ]; then
+    print_warning "Configuration cancelled"
+    exit 0
+fi
+
+print_success "All inputs collected successfully!"
