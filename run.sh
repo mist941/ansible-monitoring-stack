@@ -57,6 +57,7 @@ read -p "Enter username: " username
 check_empty_input "Username" "$username"
 
 read -sp "Enter the password: " password
+echo
 check_empty_input "Password" "$password"
 
 read -p "Enter ssh key absolute path: " ssh_key_path
@@ -73,6 +74,7 @@ read -p "New user name: " new_user_name
 check_empty_input "New user name" "$new_user_name"
 
 read -sp "New user password: " new_user_password
+echo
 check_empty_input "New user password" "$new_user_password"
 
 read -p "Enter the timezone: " timezone
