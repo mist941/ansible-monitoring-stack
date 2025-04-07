@@ -1,0 +1,23 @@
+- name: Generate password hash
+  set_fact:
+    hashed_password: "{{ new_user_password | password_hash('sha512') }}"
+
+- name: Add user
+  user:
+    name: "{{ new_user_name }}"
+    state: present
+    groups: monitoring
+    append: true
+    password: "{{ hashed_password }}"
+
+- name: Create .ssh directory
+  file:
+    path: "/home/{{ new_user_name }}/.ssh"
+    state: directory
+    mode: "0700"
+
+- name: Add SSH key to authorized_keys
+  authorized_key:
+    user: "{{ new_user_name }}"
+    key: "{{ lookup('file', ssh_key_path) }}"
+    state: present
