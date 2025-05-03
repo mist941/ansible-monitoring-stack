@@ -1,0 +1,17 @@
+- name: Create user for node_exporter
+  ansible.builtin.user:
+    name: "{{ node_exporter_user }}"
+    shell: /usr/sbin/nologin
+
+- name: Download node_exporter binary
+  ansible.builtin.get_url:
+    url: "{{ node_exporter_binary_url }}"
+    dest: "/tmp/node_exporter.tar.gz"
+    mode: '0644'
+
+- name: Extract node_exporter binary
+  ansible.builtin.unarchive:
+    src: "/tmp/node_exporter.tar.gz"
+    dest: "/opt/"
+    remote_src: yes
+
