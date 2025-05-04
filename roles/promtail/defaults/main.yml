@@ -1,0 +1,4 @@
+promtail_version: "3.4.3"
+promtail_user: "promtail"
+promtail_port: 9080
+promtail_binary_url: "https://github.com/grafana/loki/releases/download/v{{ promtail_version }}/promtail-linux-amd64"
