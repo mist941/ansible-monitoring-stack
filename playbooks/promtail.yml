@@ -1,5 +1,5 @@
 - name: Deploy promtail
-  hosts: promtail
+  hosts: promtail_servers
   become: true
   roles:
     - promtail
