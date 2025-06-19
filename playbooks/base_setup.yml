@@ -1,0 +1,5 @@
+- name: Setup servers before deployment
+  hosts: base_setup_servers
+  become: true
+  roles:
+    - base_setup
