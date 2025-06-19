@@ -3,7 +3,7 @@
     name: "{{ timezone }}"
     state: present
 - name: Install chrony for time synchronization
-  apt: 
+  apt:
     name: chrony
     state: present
 
