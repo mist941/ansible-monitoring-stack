@@ -1,0 +1,399 @@
+---
+# ============================================================================
+# SITE.YML - UNIVERSAL ORCHESTRATION PLAYBOOK
+# ============================================================================
+# This file is the single entry point for all operations:
+# - Full deployment (default)
+# - Component upgrades
+# - Validation and testing
+# - Backup and recovery operations
+#
+# OPERATION MODES:
+# ansible-playbook site.yml                    # Full deployment
+# ansible-playbook site.yml -e mode=upgrade    # Component upgrades
+# ansible-playbook site.yml -e mode=validate   # Validation only
+# ansible-playbook site.yml -e mode=backup     # Backup operations
+
+# ============================================================================
+# GLOBAL SETTINGS AND MODES
+# ============================================================================
+- name: "🚀 Operation Mode Detection and Setup"
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  become: false
+  
+  vars:
+    operation_mode: "{{ mode | default('deploy') }}"  # deploy, upgrade, validate, backup
+    project_name: "ansible-monitoring-stack"
+    project_version: "1.0.0"
+    operation_id: "{{ ansible_date_time.epoch }}"
+    operation_timestamp: "{{ ansible_date_time.iso8601 }}"
+    deployment_strategy: "{{ deploy_strategy | default('rolling') }}"
+    max_failure_percentage: "{{ max_fail_percent | default(10) }}"
+    backup_enabled: "{{ enable_backup | default(operation_mode == 'upgrade') }}"
+    backup_retention_days: "{{ backup_retention | default(30) }}"
+    skip_validation: "{{ skip_pre_checks | default(false) }}"
+    run_post_tests: "{{ enable_post_tests | default(true) }}"
+    upgrade_prometheus: "{{ prometheus_upgrade_version | default('latest') }}"
+    upgrade_grafana: "{{ grafana_upgrade_version | default('latest') }}"
+    upgrade_node_exporter: "{{ node_exporter_upgrade_version | default('latest') }}"
+    
+  tasks:
+    - name: "Detect and validate operation mode"
+      assert:
+        that:
+          - operation_mode in ['deploy', 'upgrade', 'validate', 'backup']
+        fail_msg: |
+          ❌ Invalid mode: {{ operation_mode }}
+          Valid modes: deploy, upgrade, validate, backup
+      tags: [always]
+      
+    - name: "Display operation information"
+      debug:
+        msg: |
+          🎯 ANSIBLE MONITORING STACK - {{ operation_mode.upper() }} MODE
+          =====================================================
+          
+          📋 Project: {{ project_name }} v{{ project_version }}
+          🕐 Started: {{ operation_timestamp }}
+          🆔 ID: {{ operation_id }}
+          🔧 Mode: {{ operation_mode }}
+          
+          ⚙️  Configuration:
+          - Strategy: {{ deployment_strategy }}
+          - Max failures: {{ max_failure_percentage }}%
+          - Backup: {{ backup_enabled }}
+          - Pre-validation: {{ not skip_validation }}
+          - Post-testing: {{ run_post_tests }}
+          
+          {% if operation_mode == 'upgrade' %}
+          🔄 Upgrade Versions:
+          - Prometheus: {{ upgrade_prometheus }}
+          - Grafana: {{ upgrade_grafana }}
+          - Node Exporter: {{ upgrade_node_exporter }}
+          {% endif %}
+          
+          📊 Target Infrastructure:
+          - Total hosts: {{ groups['all'] | length }}
+          - Base setup hosts: {{ groups['base_setup_servers'] | default([]) | length }}
+          - Docker hosts: {{ groups['docker_servers'] | default([]) | length }}
+          - Monitoring servers: {{ groups['monitoring_server'] | default([]) | length }}
+          - Node exporters: {{ groups['node_exporter_servers'] | default([]) | length }}
+      tags: [always, info]
+      
+    - name: "Create operation logs directory"
+      file:
+        path: "./logs/{{ operation_mode }}-{{ operation_id }}"
+        state: directory
+        mode: '0755'
+      tags: [always, setup]
+      
+    - name: "Log operation start"
+      copy:
+        content: |
+          Operation started: {{ operation_timestamp }}
+          Project: {{ project_name }} v{{ project_version }}
+          Mode: {{ operation_mode }}
+          Strategy: {{ deployment_strategy }}
+          Operation ID: {{ operation_id }}
+          Command: {{ ansible_playbook_python }} {{ playbook_dir }}/site.yml
+          User: {{ ansible_user_id }}
+          Host: {{ ansible_hostname }}
+        dest: "./logs/{{ operation_mode }}-{{ operation_id }}/operation.log"
+      tags: [always, logging]
+
+# ============================================================================
+# CONDITIONAL EXECUTION BASED ON MODE
+# ============================================================================
+
+# BACKUP MODE - only backup operations
+- import_playbook: playbooks/utilities/backup.yml
+  when: operation_mode == 'backup'
+  tags: [backup]
+
+# VALIDATE MODE - only validation without changes
+- name: "🔍 Validation-Only Mode"
+  hosts: all
+  gather_facts: true
+  become: false
+  tasks:
+    - include_tasks: validation_tasks.yml
+  when: operation_mode == 'validate'
+  tags: [validation]
+
+# ============================================================================
+# DEPLOY/UPGRADE MODE - main logic
+# ============================================================================
+
+# PRE-OPERATION VALIDATION (for deploy and upgrade)
+- name: "🔍 Pre-Operation Validation"
+  hosts: all
+  gather_facts: true
+  become: false
+  when: operation_mode in ['deploy', 'upgrade']
+  
+  pre_tasks:
+    - name: "Skip validation if requested"
+      meta: end_play
+      when: skip_validation | default(false) | bool
+      tags: [validation, pre-checks]
+      
+    - name: "Test connectivity to all hosts"
+      ping:
+      tags: [validation, pre-checks, connectivity]
+      
+    - name: "Gather system facts"
+      setup:
+        gather_subset:
+          - "!all"
+          - "!any"  
+          - "network"
+          - "hardware"
+          - "virtual"
+          - "distribution"
+      tags: [validation, pre-checks, facts]
+      
+  tasks:
+    - name: "Validate OS compatibility"
+      assert:
+        that:
+          - ansible_distribution in ['Ubuntu', 'Debian', 'CentOS', 'RedHat', 'Rocky']
+          - ansible_distribution_major_version | int >= 18
+        fail_msg: |
+          ❌ Unsupported OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Supported: Ubuntu 18+, Debian 10+, CentOS/RHEL/Rocky 8+
+        success_msg: "✅ OS compatibility: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+      tags: [validation, pre-checks, os]
+      
+    - name: "Check minimum system requirements"
+      assert:
+        that:
+          - ansible_memtotal_mb >= 1024
+          - ansible_processor_vcpus >= 1
+        fail_msg: |
+          ❌ Insufficient resources: {{ ansible_memtotal_mb }}MB RAM, {{ ansible_processor_vcpus }} CPU(s)
+          Minimum: 1GB RAM, 1 CPU
+        success_msg: "✅ System resources: {{ ansible_memtotal_mb }}MB RAM, {{ ansible_processor_vcpus }} CPU(s)"
+      tags: [validation, pre-checks, resources]
+      
+    # Additional checks for upgrade mode
+    - name: "Check existing services (upgrade mode)"
+      systemd:
+        name: "{{ item }}"
+      register: existing_services
+      loop:
+        - prometheus
+        - grafana-server
+        - node-exporter
+        - promtail
+      failed_when: false
+      when: operation_mode == 'upgrade'
+      tags: [validation, pre-checks, upgrade]
+      
+    - name: "Verify backup space for upgrade"
+      assert:
+        that:
+          - ansible_mounts | selectattr('mount', 'equalto', '/') | map(attribute='size_available') | first > 5368709120
+        fail_msg: "Insufficient disk space for backup (need 5GB)"
+      when: operation_mode == 'upgrade' and backup_enabled
+      tags: [validation, pre-checks, upgrade]
+
+# BACKUP PHASE (only for upgrade)
+- name: "💾 Backup Current Configuration"
+  hosts: all
+  become: true
+  when: operation_mode == 'upgrade' and backup_enabled
+  
+  vars:
+    backup_dir: "/var/backups/monitoring-upgrade-{{ operation_id }}"
+    
+  tasks:
+    - name: "Create backup directories"
+      file:
+        path: "{{ backup_dir }}/{{ inventory_hostname }}"
+        state: directory
+        mode: '0755'
+      tags: [backup, upgrade]
+      
+    - name: "Backup configurations and data"
+      archive:
+        path:
+          - /etc/prometheus/
+          - /etc/grafana/
+          - /var/lib/prometheus/
+          - /var/lib/grafana/
+        dest: "{{ backup_dir }}/{{ inventory_hostname }}/config-backup.tar.gz"
+        mode: '0644'
+      ignore_errors: true
+      tags: [backup, upgrade]
+
+# INFRASTRUCTURE FOUNDATION
+- name: "🏗️ Infrastructure Foundation - Base System Setup"
+  import_playbook: playbooks/base_setup.yml
+  when: operation_mode in ['deploy', 'upgrade']
+  tags: [infrastructure, foundation, base]
+  vars:
+    phase_name: "Base Setup"
+    operation_mode: "{{ operation_mode }}"
+    force_reinstall: "{{ operation_mode == 'upgrade' }}"
+    
+- name: "🐳 Infrastructure Foundation - Container Platform"  
+  import_playbook: playbooks/docker.yml
+  when: operation_mode in ['deploy', 'upgrade']
+  tags: [infrastructure, foundation, docker, containers]
+  vars:
+    phase_name: "Docker Platform"
+    operation_mode: "{{ operation_mode }}"
+    force_reinstall: "{{ operation_mode == 'upgrade' }}"
+
+# MONITORING CORE SERVICES (with upgrade logic)
+- name: "📊 Monitoring Core - Prometheus Server"
+  import_playbook: playbooks/prometheus.yml
+  when: 
+    - operation_mode in ['deploy', 'upgrade']
+    - groups['prometheus_servers'] is defined
+    - groups['prometheus_servers'] | length > 0
+    - prometheus_enabled | default(true) | bool
+  tags: [monitoring, core, prometheus, metrics]
+  vars:
+    phase_name: "Prometheus Metrics Server"
+    operation_mode: "{{ operation_mode }}"
+    prometheus_version: "{{ upgrade_prometheus if operation_mode == 'upgrade' else prometheus_version | default('latest') }}"
+    force_reinstall: "{{ operation_mode == 'upgrade' }}"
+
+- name: "📈 Monitoring Core - Grafana Dashboards"
+  import_playbook: playbooks/grafana.yml  
+  when:
+    - operation_mode in ['deploy', 'upgrade']
+    - groups['grafana_servers'] is defined
+    - groups['grafana_servers'] | length > 0
+    - grafana_enabled | default(true) | bool
+  tags: [monitoring, core, grafana, dashboards]
+  vars:
+    phase_name: "Grafana Visualization"
+    operation_mode: "{{ operation_mode }}"
+    grafana_version: "{{ upgrade_grafana if operation_mode == 'upgrade' else grafana_version | default('latest') }}"
+    force_reinstall: "{{ operation_mode == 'upgrade' }}"
+    
+- name: "📝 Monitoring Core - Loki Log Aggregation"
+  import_playbook: playbooks/loki.yml
+  when:
+    - operation_mode in ['deploy', 'upgrade']
+    - groups['loki_servers'] is defined  
+    - groups['loki_servers'] | length > 0
+    - loki_enabled | default(true) | bool
+  tags: [monitoring, core, loki, logs]
+  vars:
+    phase_name: "Loki Log Aggregation"
+    operation_mode: "{{ operation_mode }}"
+    force_reinstall: "{{ operation_mode == 'upgrade' }}"
+
+# MONITORING AGENTS
+- name: "🔍 Monitoring Agents - Node Exporter"
+  import_playbook: playbooks/node_exporter.yml
+  when: 
+    - operation_mode in ['deploy', 'upgrade']
+    - node_exporter_enabled | default(true) | bool
+  tags: [monitoring, agents, node-exporter, metrics]
+  vars:
+    phase_name: "Node Exporter Agents"
+    operation_mode: "{{ operation_mode }}"
+    node_exporter_version: "{{ upgrade_node_exporter if operation_mode == 'upgrade' else node_exporter_version | default('latest') }}"
+    force_reinstall: "{{ operation_mode == 'upgrade' }}"
+    
+- name: "📋 Monitoring Agents - Promtail Log Shipping" 
+  import_playbook: playbooks/promtail.yml
+  when: 
+    - operation_mode in ['deploy', 'upgrade']
+    - promtail_enabled | default(true) | bool
+  tags: [monitoring, agents, promtail, logs]
+  vars:
+    phase_name: "Promtail Log Shipping"
+    operation_mode: "{{ operation_mode }}"
+    force_reinstall: "{{ operation_mode == 'upgrade' }}"
+
+# POST-OPERATION VALIDATION
+- name: "✅ Post-Operation Validation"
+  hosts: all
+  gather_facts: false
+  become: false
+  when: operation_mode in ['deploy', 'upgrade'] and run_post_tests
+  
+  tasks:
+    - name: "Test service availability"
+      uri:
+        url: "{{ item.url }}"
+        method: GET
+        status_code: 200
+        timeout: 30
+      loop:
+        - { url: "http://{{ ansible_default_ipv4.address }}:9100/metrics", service: "Node Exporter", condition: "{{ inventory_hostname in groups['node_exporter_servers'] | default([]) }}" }
+        - { url: "http://{{ ansible_default_ipv4.address }}:9090/-/healthy", service: "Prometheus", condition: "{{ inventory_hostname in groups['prometheus_servers'] | default([]) }}" }
+        - { url: "http://{{ ansible_default_ipv4.address }}:3000/api/health", service: "Grafana", condition: "{{ inventory_hostname in groups['grafana_servers'] | default([]) }}" }
+        - { url: "http://{{ ansible_default_ipv4.address }}:3100/ready", service: "Loki", condition: "{{ inventory_hostname in groups['loki_servers'] | default([]) }}" }
+      when: item.condition | bool
+      register: service_health_checks
+      ignore_errors: true
+      tags: [validation, post-checks, health]
+
+# FINAL REPORTING
+- name: "📊 Operation Summary and Reporting"
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  become: false
+  when: operation_mode in ['deploy', 'upgrade']
+  
+  tasks:
+    - name: "Calculate operation duration"
+      set_fact:
+        operation_end_time: "{{ ansible_date_time.epoch }}"
+        operation_duration: "{{ ansible_date_time.epoch | int - operation_id | int }}"
+      tags: [always, reporting]
+      
+    - name: "Generate operation report"
+      debug:
+        msg: |
+          🎉 MONITORING STACK {{ operation_mode.upper() }} COMPLETED!
+          =================================================
+          
+          ⏱️  Timing:
+          - Started: {{ operation_timestamp }}
+          - Completed: {{ ansible_date_time.iso8601 }}
+          - Duration: {{ operation_duration }}s ({{ (operation_duration | int / 60) | round(1) }} minutes)
+          
+          📊 Infrastructure Summary:
+          - Total hosts: {{ groups['all'] | length }}
+          - Base setup: ✅
+          - Docker: ✅
+          - Node exporters: {{ groups['node_exporter_servers'] | default([]) | length }}
+          - Promtail agents: {{ groups['promtail_servers'] | default([]) | length }}
+          
+          {% if operation_mode == 'upgrade' %}
+          🔄 Upgraded Components:
+          - Prometheus: {{ upgrade_prometheus }}
+          - Grafana: {{ upgrade_grafana }}  
+          - Node Exporter: {{ upgrade_node_exporter }}
+          {% if backup_enabled %}
+          📁 Backup Location: /var/backups/monitoring-upgrade-{{ operation_id }}
+          {% endif %}
+          {% endif %}
+          
+          🔗 Access Points:
+          {% for host in groups['node_exporter_servers'] | default([]) %}
+          - Node Exporter ({{ host }}): http://{{ hostvars[host]['ansible_default_ipv4']['address'] }}:9100/metrics
+          {% endfor %}
+          
+          📁 Logs: ./logs/{{ operation_mode }}-{{ operation_id }}/
+      tags: [always, reporting]
+      
+    - name: "Log operation completion"
+      lineinfile:
+        path: "./logs/{{ operation_mode }}-{{ operation_id }}/operation.log"
+        line: |
+          Operation completed: {{ ansible_date_time.iso8601 }}
+          Duration: {{ operation_duration }}s
+          Status: SUCCESS
+        create: true
+      tags: [always, logging]
