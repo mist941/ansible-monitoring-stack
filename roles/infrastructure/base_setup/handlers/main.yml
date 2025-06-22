@@ -1,4 +1,6 @@
-- name: restart ssh
-  service:
-    name: ssh
+# Handlers for base_setup role
+
+- name: restart chrony
+  ansible.builtin.systemd:
+    name: chrony
     state: restarted

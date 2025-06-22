@@ -1,23 +1,58 @@
-- name: Generate password hash
-  set_fact:
-    hashed_password: "{{ new_user_password | password_hash('sha512') }}"
+---
+# Create monitoring user and setup basic directory structure
 
-- name: Add user
-  user:
-    name: "{{ new_user_name }}"
+- name: Create monitoring group
+  ansible.builtin.group:
+    name: monitoring
     state: present
-    groups: monitoring
-    append: true
-    password: "{{ hashed_password }}"
+    system: true
 
-- name: Create .ssh directory
-  file:
-    path: "/home/{{ new_user_name }}/.ssh"
+- name: Create monitoring user
+  ansible.builtin.user:
+    name: "{{ monitoring_user_name }}"
+    group: monitoring
+    shell: "{{ monitoring_user_shell }}"
+    create_home: true
+    state: present
+    system: true
+    password: "{{ monitoring_user_password }}"
+
+- name: Create .ssh directory for monitoring user
+  ansible.builtin.file:
+    path: "/home/{{ monitoring_user_name }}/.ssh"
     state: directory
+    owner: "{{ monitoring_user_name }}"
+    group: "{{ monitoring_user_name }}"
     mode: "0700"
 
-- name: Add SSH key to authorized_keys
-  authorized_key:
-    user: "{{ new_user_name }}"
-    key: "{{ lookup('file', ssh_key_path) }}"
+- name: Add SSH key to authorized_keys (if provided)
+  ansible.builtin.authorized_key:
+    user: "{{ monitoring_user_name }}"
+    key: "{{ monitoring_user_ssh_key }}"
     state: present
+  when: monitoring_user_ssh_key is defined
+
+- name: Create basic monitoring directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ monitoring_user_name }}"
+    group: monitoring
+    mode: "0755"
+  loop:
+    - /opt/monitoring
+    - /var/log/monitoring
+    - /etc/monitoring
+
+- name: Create basic sudo permissions for monitoring user
+  ansible.builtin.copy:
+    content: |
+      # Basic sudo permissions for monitoring user
+      {{ monitoring_user_name }} ALL=(ALL) NOPASSWD: /bin/systemctl status *
+      {{ monitoring_user_name }} ALL=(ALL) NOPASSWD: /usr/bin/docker ps
+      {{ monitoring_user_name }} ALL=(ALL) NOPASSWD: /bin/cat /var/log/*
+    dest: "/etc/sudoers.d/{{ monitoring_user_name }}"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "visudo -cf %s"

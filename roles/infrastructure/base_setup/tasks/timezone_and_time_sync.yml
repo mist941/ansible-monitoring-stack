@@ -1,14 +1,30 @@
-- name: Set timezone
-  timezone:
+---
+# Timezone and time synchronization configuration
+
+- name: Set system timezone
+  community.general.timezone:
     name: "{{ timezone }}"
-    state: present
+  notify: restart chrony
+
 - name: Install chrony for time synchronization
-  apt:
+  ansible.builtin.apt:
     name: chrony
     state: present
 
 - name: Enable and start chrony service
-  service:
+  ansible.builtin.systemd:
     name: chrony
     state: started
-    enabled: yes
+    enabled: true
+
+- name: Wait for time synchronization
+  ansible.builtin.command: chronyc waitsync 30 0.1
+  register: chrony_sync
+  changed_when: false
+  failed_when: false
+  retries: 2
+  delay: 10
+
+- name: Display time sync status
+  ansible.builtin.debug:
+    msg: "Time synchronization: {{ 'OK' if chrony_sync.rc == 0 else 'Failed - will sync in background' }}"

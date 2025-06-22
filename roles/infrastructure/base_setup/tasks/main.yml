@@ -1,3 +1,21 @@
-- import_tasks: system_update.yml
-- import_tasks: timezone_and_time_sync.yml
-- import_tasks: create_user.yml
+---
+# Main tasks file for base_setup role
+# Basic system setup for monitoring infrastructure deployment
+
+- name: Update package cache and upgrade system
+  ansible.builtin.include_tasks: system_update.yml
+  tags:
+    - base_setup
+    - updates
+
+- name: Configure timezone and time synchronization
+  ansible.builtin.include_tasks: timezone_and_time_sync.yml
+  tags:
+    - base_setup
+    - time
+
+- name: Create monitoring user and setup
+  ansible.builtin.include_tasks: create_user.yml
+  tags:
+    - base_setup
+    - users

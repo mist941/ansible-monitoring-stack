@@ -1,0 +1,25 @@
+---
+galaxy_info:
+  role_name: base_setup
+  author: "mist941"
+  description: "Basic system setup for monitoring infrastructure"
+  
+  platforms:
+    - name: Ubuntu
+      versions:
+        - jammy
+        - focal
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+
+  galaxy_tags:
+    - infrastructure
+    - monitoring
+    - base
+
+dependencies: []
+
+collections:
+  - community.general

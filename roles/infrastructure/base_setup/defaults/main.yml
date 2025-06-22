@@ -1,1 +1,24 @@
+# Time configuration
 timezone: "UTC"
+
+# System update settings
+base_setup_update_cache: true
+base_setup_upgrade_packages: true
+
+# Monitoring user configuration
+monitoring_user_name: "monitoring"
+monitoring_user_password: "!"
+monitoring_user_shell: "/bin/bash"
+
+# SSH key for monitoring user (provide this in group_vars or host_vars)
+# monitoring_user_ssh_key: "ssh-rsa AAAA..."
+
+# Essential packages for monitoring setup
+base_setup_packages:
+  - curl
+  - wget
+  - htop
+  - vim
+  - python3
+  - python3-pip
+  - chrony

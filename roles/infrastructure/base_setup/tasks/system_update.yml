@@ -1,8 +1,36 @@
-- name: Update apt
-  apt:
+---
+# System update and essential packages installation
+
+- name: Update package cache
+  ansible.builtin.apt:
     update_cache: true
+    cache_valid_time: 3600
+  when: base_setup_update_cache | bool
+  register: apt_update
+  retries: 3
+  delay: 10
+  until: apt_update is succeeded
 
 - name: Upgrade all packages
-  apt:
-    upgrade: dist
-    state: latest
+  ansible.builtin.apt:
+    upgrade: safe
+    autoremove: true
+  when: base_setup_upgrade_packages | bool
+  register: apt_upgrade
+  retries: 2
+  delay: 15
+  until: apt_upgrade is succeeded
+
+- name: Install essential packages for monitoring
+  ansible.builtin.apt:
+    name: "{{ base_setup_packages }}"
+    state: present
+    install_recommends: false
+  register: packages_install
+  retries: 3
+  delay: 10
+  until: packages_install is succeeded
+
+- name: Clean up package cache
+  ansible.builtin.apt:
+    autoclean: true
