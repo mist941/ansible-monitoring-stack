@@ -19,6 +19,4 @@ base_setup_packages:
   - wget
   - htop
   - vim
-  - python3
-  - python3-pip
   - chrony
