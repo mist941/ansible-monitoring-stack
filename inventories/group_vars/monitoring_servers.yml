@@ -1,0 +1,224 @@
+---
+# ============================================================================
+# MONITORING SERVERS CONFIGURATION
+# ============================================================================
+# Purpose: Variables for servers running monitoring services
+# Scope: monitoring_servers group (Prometheus, Grafana, Loki)
+# ============================================================================
+
+# ============================================================================
+# PROMETHEUS CONFIGURATION
+# ============================================================================
+
+# Prometheus server settings
+prometheus_version: "2.49.1"
+prometheus_user: "prometheus"
+prometheus_group: "prometheus"
+prometheus_config_dir: "/etc/prometheus"
+prometheus_data_dir: "/var/lib/prometheus"
+prometheus_binary_path: "/usr/local/bin/prometheus"
+
+# Prometheus retention and storage
+prometheus_storage_retention: "{{ metrics_retention_days }}d"
+prometheus_storage_retention_size: "10GB"
+
+# Prometheus configuration
+prometheus_global_config:
+  scrape_interval: "15s"
+  evaluation_interval: "15s"
+  external_labels:
+    cluster: "{{ deployment_environment }}"
+    replica: "{{ inventory_hostname }}"
+
+# Default scrape configurations
+prometheus_scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:{{ monitoring_ports.prometheus }}"]
+
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: |
+          {% for host in groups['node_exporter_servers'] %}
+          {{ hostvars[host]['ansible_default_ipv4']['address'] }}:{{ monitoring_ports.node_exporter }}{% if not loop.last %},{% endif %}
+          {% endfor %}
+
+# ============================================================================
+# GRAFANA CONFIGURATION
+# ============================================================================
+
+# Grafana server settings
+grafana_version: "10.2.4"
+grafana_user: "grafana"
+grafana_group: "grafana"
+grafana_config_dir: "/etc/grafana"
+grafana_data_dir: "/var/lib/grafana"
+grafana_logs_dir: "/var/log/grafana"
+
+# Grafana security settings
+grafana_admin_user: "admin"
+# grafana_admin_password: defined in vault.yml
+
+# Grafana server configuration
+grafana_server:
+  http_port: "{{ monitoring_ports.grafana }}"
+  root_url: "http://{{ ansible_default_ipv4.address }}:{{ monitoring_ports.grafana }}/"
+  serve_from_sub_path: false
+
+# Grafana database settings (SQLite by default)
+grafana_database:
+  type: "sqlite3"
+  path: "{{ grafana_data_dir }}/grafana.db"
+
+# Default Grafana datasources
+grafana_datasources:
+  - name: "Prometheus"
+    type: "prometheus"
+    url: "http://localhost:{{ monitoring_ports.prometheus }}"
+    access: "proxy"
+    is_default: true
+
+  - name: "Loki"
+    type: "loki"
+    url: "http://localhost:{{ monitoring_ports.loki }}"
+    access: "proxy"
+
+# ============================================================================
+# LOKI CONFIGURATION
+# ============================================================================
+
+# Loki server settings
+loki_version: "2.9.4"
+loki_user: "loki"
+loki_group: "loki"
+loki_config_dir: "/etc/loki"
+loki_data_dir: "/var/lib/loki"
+
+# Loki retention
+loki_retention_period: "{{ logs_retention_days }}d"
+
+# Basic Loki configuration
+loki_config:
+  auth_enabled: false
+  server:
+    http_listen_port: "{{ monitoring_ports.loki }}"
+    grpc_listen_port: 9096
+
+  common:
+    path_prefix: "{{ loki_data_dir }}"
+    storage:
+      filesystem:
+        chunks_directory: "{{ loki_data_dir }}/chunks"
+        rules_directory: "{{ loki_data_dir }}/rules"
+    replication_factor: 1
+    ring:
+      instance_addr: "127.0.0.1"
+      kvstore:
+        store: "inmemory"
+
+# ============================================================================
+# ALERTMANAGER CONFIGURATION
+# ============================================================================
+
+# AlertManager settings (if enabled)
+alertmanager_version: "0.26.0"
+alertmanager_user: "alertmanager"
+alertmanager_group: "alertmanager"
+alertmanager_config_dir: "/etc/alertmanager"
+alertmanager_data_dir: "/var/lib/alertmanager"
+
+# AlertManager configuration
+alertmanager_config:
+  global:
+    smtp_smarthost: "localhost:587"
+  route:
+    group_by: ["alertname"]
+    group_wait: "10s"
+    group_interval: "10s"
+    repeat_interval: "1h"
+    receiver: "web.hook"
+  receivers:
+    - name: "web.hook"
+      webhook_configs:
+        - url: "http://127.0.0.1:5001/"
+
+# ============================================================================
+# DOCKER COMPOSE CONFIGURATION
+# ============================================================================
+
+# Docker Compose for monitoring stack
+monitoring_docker_compose_services:
+  - prometheus
+  - grafana
+  - loki
+
+# Docker volumes
+monitoring_docker_volumes:
+  prometheus_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "{{ prometheus_data_dir }}"
+
+  grafana_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "{{ grafana_data_dir }}"
+
+  loki_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: "{{ loki_data_dir }}"
+
+# ============================================================================
+# FIREWALL RULES FOR MONITORING SERVERS
+# ============================================================================
+
+# Additional firewall rules for monitoring servers
+monitoring_server_firewall_rules:
+  - rule: allow
+    port: "{{ monitoring_ports.prometheus }}"
+    proto: tcp
+    src: "{{ monitoring_allowed_networks }}"
+    comment: "Prometheus web interface"
+
+  - rule: allow
+    port: "{{ monitoring_ports.grafana }}"
+    proto: tcp
+    src: "{{ monitoring_allowed_networks }}"
+    comment: "Grafana web interface"
+
+  - rule: allow
+    port: "{{ monitoring_ports.loki }}"
+    proto: tcp
+    src: "{{ monitoring_allowed_networks }}"
+    comment: "Loki API"
+
+  - rule: allow
+    port: "{{ monitoring_ports.alertmanager }}"
+    proto: tcp
+    src: "{{ monitoring_allowed_networks }}"
+    comment: "AlertManager web interface"
+
+# ============================================================================
+# MONITORING SERVER LIMITS
+# ============================================================================
+
+# Resource limits for monitoring services
+monitoring_server_limits:
+  prometheus:
+    memory_limit: "{{ monitoring_limits.prometheus_memory }}"
+    cpu_limit: "2"
+
+  grafana:
+    memory_limit: "{{ monitoring_limits.grafana_memory }}"
+    cpu_limit: "0.5"
+
+  loki:
+    memory_limit: "{{ monitoring_limits.loki_memory }}"
+    cpu_limit: "1"

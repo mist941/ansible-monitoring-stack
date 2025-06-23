@@ -1,0 +1,169 @@
+---
+# ============================================================================
+# GLOBAL VARIABLES FOR MONITORING INFRASTRUCTURE
+# ============================================================================
+# Purpose: Common settings applied to all servers
+# Scope: All hosts in inventory
+# ============================================================================
+
+# ============================================================================
+# PROJECT METADATA
+# ============================================================================
+project_name: "ansible-monitoring-stack"
+project_version: "1.0.0"
+deployment_environment: "production" # production, staging, development
+
+# ============================================================================
+# BASIC SYSTEM CONFIGURATION
+# ============================================================================
+
+# Timezone settings (applied to all servers)
+timezone: "Europe/Kiev" # Change to your timezone
+
+# Monitoring user configuration
+monitoring_user_name: "monitoring"
+monitoring_user_password: "!" # Disabled password, use SSH keys
+monitoring_user_shell: "/bin/bash"
+
+# System update settings
+base_setup_update_cache: true
+base_setup_upgrade_packages: true
+
+# Essential packages for all servers
+base_setup_packages:
+  - curl
+  - wget
+  - htop
+  - vim
+  - chrony
+  - net-tools
+  - unzip
+
+# ============================================================================
+# MONITORING CONFIGURATION
+# ============================================================================
+
+# Global monitoring settings
+monitoring_enabled: true
+metrics_retention_days: 30
+logs_retention_days: 7
+
+# Monitoring data directories
+monitoring_data_dir: "/opt/monitoring"
+monitoring_logs_dir: "/var/log/monitoring"
+monitoring_config_dir: "/etc/monitoring"
+
+# ============================================================================
+# NETWORK CONFIGURATION
+# ============================================================================
+
+# Default monitoring ports
+monitoring_ports:
+  prometheus: 9090
+  grafana: 3000
+  loki: 3100
+  alertmanager: 9093
+  node_exporter: 9100
+  promtail: 9080
+
+# Allowed monitoring networks (adjust to your network)
+monitoring_allowed_networks:
+  - "10.0.0.0/8"
+  - "192.168.0.0/16"
+  - "172.16.0.0/12"
+
+# ============================================================================
+# DOCKER CONFIGURATION
+# ============================================================================
+
+# Docker settings (for servers with Docker)
+docker_enabled: true
+docker_compose_version: "2.24.0"
+docker_users:
+  - "{{ ansible_user }}"
+  - "{{ monitoring_user_name }}"
+
+# Docker daemon configuration
+docker_daemon_config:
+  log-driver: "json-file"
+  log-opts:
+    max-size: "10m"
+    max-file: "3"
+  storage-driver: "overlay2"
+
+# ============================================================================
+# SECURITY CONFIGURATION
+# ============================================================================
+
+# Firewall settings
+firewall_enabled: true
+firewall_default_input_policy: "DROP"
+firewall_default_forward_policy: "DROP"
+firewall_default_output_policy: "ACCEPT"
+
+# SSH configuration
+ssh_port: 22
+ssh_permit_root_login: false
+ssh_password_authentication: false
+ssh_pubkey_authentication: true
+
+# ============================================================================
+# BACKUP CONFIGURATION
+# ============================================================================
+
+# Backup settings
+backup_enabled: true
+backup_retention_days: 30
+backup_base_dir: "/var/backups/monitoring"
+
+# What to backup
+backup_paths:
+  - "/etc/prometheus"
+  - "/etc/grafana"
+  - "/etc/loki"
+  - "/var/lib/prometheus"
+  - "/var/lib/grafana"
+
+# ============================================================================
+# ALERTING CONFIGURATION
+# ============================================================================
+
+# Alert manager settings
+alerting_enabled: true
+alert_retention_hours: 72
+
+# Default alert receivers (configure in vault.yml)
+alert_email_enabled: false
+alert_slack_enabled: false
+alert_webhook_enabled: false
+
+# ============================================================================
+# PERFORMANCE TUNING
+# ============================================================================
+
+# System limits for monitoring services
+monitoring_limits:
+  prometheus_memory: "2GB"
+  grafana_memory: "512MB"
+  loki_memory: "1GB"
+  max_open_files: 65536
+
+# ============================================================================
+# FEATURE FLAGS
+# ============================================================================
+
+# Enable/disable specific components
+features:
+  prometheus_enabled: true
+  grafana_enabled: true
+  loki_enabled: true
+  alertmanager_enabled: true
+  node_exporter_enabled: true
+  promtail_enabled: true
+
+# Optional integrations
+integrations:
+  blackbox_exporter: false
+  postgres_exporter: false
+  nginx_exporter: false
+  redis_exporter: false

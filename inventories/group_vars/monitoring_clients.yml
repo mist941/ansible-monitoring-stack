@@ -1,0 +1,232 @@
+---
+# ============================================================================
+# MONITORING CLIENTS CONFIGURATION
+# ============================================================================
+# Purpose: Variables for servers being monitored (agents deployment)
+# Scope: monitoring_clients group (Node Exporter, Promtail agents)
+# ============================================================================
+
+# ============================================================================
+# NODE EXPORTER CONFIGURATION
+# ============================================================================
+
+# Node Exporter settings
+node_exporter_version: "1.7.0"
+node_exporter_user: "node-exporter"
+node_exporter_group: "node-exporter"
+node_exporter_binary_path: "/usr/local/bin/node_exporter"
+node_exporter_config_dir: "/etc/node-exporter"
+
+# Node Exporter service configuration
+node_exporter_service:
+  name: "node-exporter"
+  enabled: true
+  state: "started"
+
+# Node Exporter command line arguments
+node_exporter_cli_args:
+  - "--web.listen-address=0.0.0.0:{{ monitoring_ports.node_exporter }}"
+  - "--path.procfs=/proc"
+  - "--path.sysfs=/sys"
+  - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+  - "--collector.systemd"
+  - "--collector.processes"
+
+# Node Exporter collectors to enable
+node_exporter_enabled_collectors:
+  - "systemd"
+  - "processes"
+  - "filesystem"
+  - "meminfo"
+  - "netdev"
+  - "time"
+  - "uname"
+
+# Node Exporter collectors to disable
+node_exporter_disabled_collectors:
+  - "mdadm"
+  - "wifi"
+
+# ============================================================================
+# PROMTAIL CONFIGURATION
+# ============================================================================
+
+# Promtail settings
+promtail_version: "2.9.4"
+promtail_user: "promtail"
+promtail_group: "promtail"
+promtail_binary_path: "/usr/local/bin/promtail"
+promtail_config_dir: "/etc/promtail"
+promtail_data_dir: "/var/lib/promtail"
+
+# Promtail service configuration
+promtail_service:
+  name: "promtail"
+  enabled: true
+  state: "started"
+
+# Loki server URL for Promtail (auto-detected from monitoring_servers)
+promtail_loki_url: |
+  {% for host in groups['loki_servers'] %}
+  http://{{ hostvars[host]['ansible_default_ipv4']['address'] }}:{{ monitoring_ports.loki }}/loki/api/v1/push{% if not loop.last %},{% endif %}
+  {% endfor %}
+
+# Promtail configuration
+promtail_config:
+  server:
+    http_listen_port: "{{ monitoring_ports.promtail }}"
+    grpc_listen_port: 9096
+
+  clients:
+    - url: "{{ promtail_loki_url }}"
+      tenant_id: "{{ deployment_environment }}"
+
+  positions:
+    filename: "{{ promtail_data_dir }}/positions.yaml"
+
+  scrape_configs:
+    # System logs
+    - job_name: "syslog"
+      static_configs:
+        - targets:
+            - "localhost"
+          labels:
+            job: "syslog"
+            host: "{{ inventory_hostname }}"
+            environment: "{{ deployment_environment }}"
+            __path__: "/var/log/syslog"
+
+    # Auth logs
+    - job_name: "auth"
+      static_configs:
+        - targets:
+            - "localhost"
+          labels:
+            job: "auth"
+            host: "{{ inventory_hostname }}"
+            environment: "{{ deployment_environment }}"
+            __path__: "/var/log/auth.log"
+
+    # Application logs (if exists)
+    - job_name: "application"
+      static_configs:
+        - targets:
+            - "localhost"
+          labels:
+            job: "application"
+            host: "{{ inventory_hostname }}"
+            environment: "{{ deployment_environment }}"
+            __path__: "/var/log/application/*.log"
+
+# ============================================================================
+# LOG PATHS CONFIGURATION
+# ============================================================================
+
+# Common log paths to monitor
+monitoring_log_paths:
+  system:
+    - "/var/log/syslog"
+    - "/var/log/auth.log"
+    - "/var/log/kern.log"
+    - "/var/log/dmesg"
+
+  web_servers:
+    - "/var/log/nginx/access.log"
+    - "/var/log/nginx/error.log"
+    - "/var/log/apache2/access.log"
+    - "/var/log/apache2/error.log"
+
+  database:
+    - "/var/log/mysql/error.log"
+    - "/var/log/postgresql/postgresql-*.log"
+
+  application:
+    - "/var/log/application/*.log"
+    - "/opt/*/logs/*.log"
+
+# ============================================================================
+# CLIENT FIREWALL CONFIGURATION
+# ============================================================================
+
+# Firewall rules for monitoring clients
+monitoring_client_firewall_rules:
+  - rule: allow
+    port: "{{ monitoring_ports.node_exporter }}"
+    proto: tcp
+    src: "{{ monitoring_allowed_networks }}"
+    comment: "Node Exporter metrics"
+
+  - rule: allow
+    port: "{{ monitoring_ports.promtail }}"
+    proto: tcp
+    src: "{{ monitoring_allowed_networks }}"
+    comment: "Promtail status"
+
+# ============================================================================
+# MONITORING LABELS AND METADATA
+# ============================================================================
+
+# Default labels for all metrics from this client
+client_default_labels:
+  environment: "{{ deployment_environment }}"
+  datacenter: "{{ datacenter | default('default') }}"
+  role: "{{ server_type | default('generic') }}"
+
+# Additional labels based on server type
+client_type_labels:
+  web:
+    service: "web-server"
+    tier: "frontend"
+
+  database:
+    service: "database"
+    tier: "data"
+
+  application:
+    service: "application"
+    tier: "backend"
+
+# ============================================================================
+# RESOURCE LIMITS FOR AGENTS
+# ============================================================================
+
+# Resource limits for monitoring agents
+monitoring_agent_limits:
+  node_exporter:
+    memory_limit: "64MB"
+    cpu_limit: "0.1"
+
+  promtail:
+    memory_limit: "128MB"
+    cpu_limit: "0.2"
+
+# ============================================================================
+# MONITORING CLIENT HEALTH CHECKS
+# ============================================================================
+
+# Health check endpoints for monitoring clients
+client_health_checks:
+  node_exporter:
+    url: "http://localhost:{{ monitoring_ports.node_exporter }}/metrics"
+    timeout: 5
+
+  promtail:
+    url: "http://localhost:{{ monitoring_ports.promtail }}/ready"
+    timeout: 5
+
+# ============================================================================
+# CUSTOM METRICS CONFIGURATION
+# ============================================================================
+
+# Custom textfile collector directory for Node Exporter
+node_exporter_textfile_dir: "/var/lib/node_exporter/textfile_collector"
+
+# Custom scripts for generating metrics
+custom_metrics_scripts:
+  - name: "disk_usage"
+    path: "/usr/local/bin/disk_usage_metrics.sh"
+    interval: "*/5 * * * *" # Every 5 minutes
+
+  - name: "service_status"
+    path: "/usr/local/bin/service_status_metrics.sh"
+    interval: "*/1 * * * *" # Every minute

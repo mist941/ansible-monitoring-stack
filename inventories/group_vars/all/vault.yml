@@ -1,0 +1,141 @@
+---
+# ============================================================================
+# ANSIBLE VAULT - SENSITIVE VARIABLES
+# ============================================================================
+# Purpose: Encrypted storage for passwords, keys, and sensitive configuration
+# Usage: ansible-vault encrypt inventories/group_vars/all/vault.yml
+# Edit: ansible-vault edit inventories/group_vars/all/vault.yml
+# ============================================================================
+
+# ============================================================================
+# MONITORING USER CREDENTIALS
+# ============================================================================
+
+# SSH key for monitoring user (replace with your actual public key)
+monitoring_user_ssh_key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7... monitoring@example.com"
+
+# ============================================================================
+# GRAFANA CREDENTIALS
+# ============================================================================
+
+# Grafana admin password (change this!)
+grafana_admin_password: "StrongAdminPassword123!"
+
+# Grafana database password (if using external DB)
+grafana_database_password: "GrafanaDBPassword123!"
+
+# Grafana secret key for sessions
+grafana_secret_key: "SW2YcwTIb9zpOOhoPsMm"
+
+# ============================================================================
+# DATABASE CREDENTIALS
+# ============================================================================
+
+# PostgreSQL monitoring user (if using postgres_exporter)
+postgres_monitoring_user: "monitoring"
+postgres_monitoring_password: "PostgresMonitoringPass123!"
+
+# MySQL monitoring user (if using mysqld_exporter)
+mysql_monitoring_user: "monitoring"
+mysql_monitoring_password: "MySQLMonitoringPass123!"
+
+# ============================================================================
+# ALERTING CREDENTIALS
+# ============================================================================
+
+# SMTP credentials for email alerts
+alert_email_config:
+  smtp_host: "smtp.gmail.com"
+  smtp_port: 587
+  smtp_user: "alerts@yourcompany.com"
+  smtp_password: "YourAppSpecificPassword"
+  from_address: "alerts@yourcompany.com"
+  to_addresses:
+    - "admin@yourcompany.com"
+    - "ops-team@yourcompany.com"
+
+# Slack webhook for alerts
+alert_slack_webhook: "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK"
+alert_slack_channel: "#monitoring-alerts"
+
+# PagerDuty integration key
+alert_pagerduty_key: "YOUR_PAGERDUTY_INTEGRATION_KEY"
+
+# ============================================================================
+# API KEYS AND TOKENS
+# ============================================================================
+
+# Grafana API key for automation
+grafana_api_key: "eyJrIjoiWW91ckdyYWZhbmFBUElLZXlIZXJl"
+
+# Prometheus webhook token
+prometheus_webhook_token: "your-secure-webhook-token-here"
+
+# ============================================================================
+# TLS/SSL CERTIFICATES
+# ============================================================================
+
+# SSL certificate for HTTPS (if using)
+monitoring_ssl_cert: |
+  -----BEGIN CERTIFICATE-----
+  # Your SSL certificate here
+  -----END CERTIFICATE-----
+
+monitoring_ssl_key: |
+  -----BEGIN PRIVATE KEY-----
+  # Your SSL private key here
+  -----END PRIVATE KEY-----
+
+# ============================================================================
+# EXTERNAL SERVICE CREDENTIALS
+# ============================================================================
+
+# Docker registry credentials (if using private registry)
+docker_registry_auth:
+  username: "your-registry-user"
+  password: "your-registry-password"
+  email: "you@yourcompany.com"
+
+# Cloud provider credentials (AWS/GCP/Azure)
+cloud_credentials:
+  aws_access_key: "YOUR_AWS_ACCESS_KEY"
+  aws_secret_key: "YOUR_AWS_SECRET_KEY"
+  gcp_service_account_key: |
+    {
+      "type": "service_account",
+      "project_id": "your-project-id"
+    }
+
+# ============================================================================
+# BACKUP CREDENTIALS
+# ============================================================================
+
+# S3 credentials for backup storage
+backup_s3_config:
+  access_key: "YOUR_S3_ACCESS_KEY"
+  secret_key: "YOUR_S3_SECRET_KEY"
+  bucket: "monitoring-backups"
+  region: "us-east-1"
+# ============================================================================
+# INSTRUCTIONS FOR USAGE
+# ============================================================================
+#
+# 1. Encrypt this file after editing:
+#    ansible-vault encrypt inventories/group_vars/all/vault.yml
+#
+# 2. Edit encrypted file:
+#    ansible-vault edit inventories/group_vars/all/vault.yml
+#
+# 3. Change vault password:
+#    ansible-vault rekey inventories/group_vars/all/vault.yml
+#
+# 4. Run playbooks with vault:
+#    ansible-playbook site.yml --ask-vault-pass
+#    # or with password file:
+#    ansible-playbook site.yml --vault-password-file ~/.ansible/vault_pass
+#
+# 5. Store vault password securely:
+#    echo 'your_vault_password' > ~/.ansible/vault_pass
+#    chmod 600 ~/.ansible/vault_pass
+#
+# ============================================================================
