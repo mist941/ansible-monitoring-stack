@@ -230,7 +230,7 @@
 
 # INFRASTRUCTURE FOUNDATION
 - name: "🏗️ Infrastructure Foundation - Base System Setup"
-  import_playbook: playbooks/base_setup.yml
+  import_playbook: playbooks/infrastructure/base_setup.yml
   when: operation_mode in ['deploy', 'upgrade']
   tags: [infrastructure, foundation, base]
   vars:
@@ -239,7 +239,7 @@
     force_reinstall: "{{ operation_mode == 'upgrade' }}"
     
 - name: "🐳 Infrastructure Foundation - Container Platform"  
-  import_playbook: playbooks/docker.yml
+  import_playbook: playbooks/infrastructure/docker.yml
   when: operation_mode in ['deploy', 'upgrade']
   tags: [infrastructure, foundation, docker, containers]
   vars:
@@ -249,7 +249,7 @@
 
 # MONITORING CORE SERVICES (with upgrade logic)
 - name: "📊 Monitoring Core - Prometheus Server"
-  import_playbook: playbooks/prometheus.yml
+  import_playbook: playbooks/monitoring/prometheus.yml
   when: 
     - operation_mode in ['deploy', 'upgrade']
     - groups['prometheus_servers'] is defined
@@ -263,7 +263,7 @@
     force_reinstall: "{{ operation_mode == 'upgrade' }}"
 
 - name: "📈 Monitoring Core - Grafana Dashboards"
-  import_playbook: playbooks/grafana.yml  
+  import_playbook: playbooks/monitoring/grafana.yml  
   when:
     - operation_mode in ['deploy', 'upgrade']
     - groups['grafana_servers'] is defined
@@ -277,7 +277,7 @@
     force_reinstall: "{{ operation_mode == 'upgrade' }}"
     
 - name: "📝 Monitoring Core - Loki Log Aggregation"
-  import_playbook: playbooks/loki.yml
+  import_playbook: playbooks/monitoring/loki.yml
   when:
     - operation_mode in ['deploy', 'upgrade']
     - groups['loki_servers'] is defined  
@@ -291,7 +291,7 @@
 
 # MONITORING AGENTS
 - name: "🔍 Monitoring Agents - Node Exporter"
-  import_playbook: playbooks/node_exporter.yml
+  import_playbook: playbooks/agents/node_exporter.yml
   when: 
     - operation_mode in ['deploy', 'upgrade']
     - node_exporter_enabled | default(true) | bool
@@ -303,7 +303,7 @@
     force_reinstall: "{{ operation_mode == 'upgrade' }}"
     
 - name: "📋 Monitoring Agents - Promtail Log Shipping" 
-  import_playbook: playbooks/promtail.yml
+  import_playbook: playbooks/agents/promtail.yml
   when: 
     - operation_mode in ['deploy', 'upgrade']
     - promtail_enabled | default(true) | bool

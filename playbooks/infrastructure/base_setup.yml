@@ -1,6 +1,79 @@
-- name: Setup servers before deployment
+---
+# =============================================================================
+# BASE SYSTEM SETUP PLAYBOOK
+# =============================================================================
+# Purpose: Base system setup for monitoring infrastructure
+# Support: Ubuntu 22.04+, Debian 11+
+# Role: roles/infrastructure/base_setup
+# =============================================================================
+
+- name: "🏗️ Base System Setup for Monitoring Infrastructure"
   hosts: base_setup_servers
   become: true
+  gather_facts: true
+
+  vars:
+    # Inherit variables from site.yml if called from there
+    phase_name: "{{ phase_name | default('Base System Setup') }}"
+    operation_mode: "{{ operation_mode | default('deploy') }}"
+    force_reinstall: "{{ force_reinstall | default(false) }}"
+
+  pre_tasks:
+    - name: "Validate OS compatibility for base_setup role"
+      assert:
+        that:
+          - ansible_distribution in ['Ubuntu', 'Debian']
+          - (ansible_distribution == 'Ubuntu' and ansible_distribution_version is version('18.04', '>=')) or
+            (ansible_distribution == 'Debian' and ansible_distribution_version is version('10', '>='))
+        fail_msg: |
+          ❌ Unsupported OS for base_setup role: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Supported: Ubuntu 22.04+, Debian 11+
+        success_msg: "✅ OS compatibility verified: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+      tags: [always, base_setup, validation]
+
+    - name: "Display base setup phase information"
+      debug:
+        msg: |
+          🏗️ {{ phase_name | upper }}
+          =====================================
+
+          🎯 Mode: {{ operation_mode }}
+          🖥️ Target: {{ inventory_hostname }}
+          📦 OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          🔄 Force reinstall: {{ force_reinstall }}
+
+          📋 Base setup tasks:
+          - ✅ System updates and essential packages
+          - ✅ Timezone and time synchronization 
+          - ✅ Monitoring user creation and permissions
+          - ✅ Basic directory structure setup
+      tags: [always, base_setup, info]
+
   roles:
-    - base_setup
-    
+    - role: infrastructure/base_setup
+      tags: [base_setup, infrastructure, foundation]
+
+  post_tasks:
+    - name: "Verify base setup completion"
+      debug:
+        msg: |
+          ✅ Base setup completed successfully on {{ inventory_hostname }}
+
+          📊 Status:
+          - Monitoring user: {{ monitoring_user_name | default('monitoring') }}
+          - Timezone: {{ timezone | default('UTC') }}
+          - Essential packages: installed
+          - Time sync: configured
+      tags: [always, base_setup, completion]
+
+    - name: "Test monitoring user and directories"
+      stat:
+        path: "{{ item }}"
+      register: base_setup_validation
+      loop:
+        - "/home/{{ monitoring_user_name | default('monitoring') }}"
+        - "/opt/monitoring"
+        - "/var/log/monitoring"
+        - "/etc/monitoring"
+      failed_when: not base_setup_validation.results | selectattr('stat.exists', 'equalto', true) | list | length == 4
+      tags: [base_setup, validation, completion]
